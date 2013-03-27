@@ -97,12 +97,32 @@ class APN::App < APN::Base
       APN::Connection.open_for_delivery({:cert => self.cert}) do |conn, sock|
         unsent_group_notifications.each do |gnoty|
           gnoty.devices.find_each do |device|
-            conn.write(gnoty.message_for_sending(device))
+            begin
+              conn.write(gnoty.enhanced_message_for_sending(device))
+              gnoty.sent_at = Time.now
+              gnoty.save
+            rescue Exception => e
+              if e.message == "Broken pipe"
+                #Write failed (disconnected). Read response.
+                error_code, notif_id = response_from_apns(conn)
+                if error_code == 8
+                  failed_notification = APN::Notification.find(notif_id)
+                  unless failed_notification.nil?
+                    unless failed_notification.device.nil?
+                      APN::Device.delete(failed_notification.device.id)
+                      # retry sending notifications after invalid token was deleted
+                      send_notifications_for_cert(the_cert, app_id)
+                    end
+                  end
+                end
+              end
+            end
           end
-          gnoty.sent_at = Time.now
-          gnoty.save
         end
       end
+    end
+    rescue Exception => e
+      log_connection_exception(e)
     end
   end
 
