@@ -93,17 +93,26 @@ class APN::App < APN::Base
       raise APN::Errors::MissingCertificateError.new
       return
     end
-    unless self.unsent_group_notifications.nil? || self.unsent_group_notifications.empty?
-      APN::Connection.open_for_delivery({:cert => self.cert}) do |conn, sock|
-        unsent_group_notifications.each do |gnoty|
-          gnoty.devices.find_each do |device|
-            conn.write(gnoty.message_for_sending(device))
+    unless self.unsent_group_notifications.blank?
+      unsent_group_notifications.each do |gnoty|
+        device_curr = 0 # remember the broken position and skip the device.
+        begin
+          # build connection to the server for each notification
+          APN::Connection.open_for_delivery({:cert => self.cert}) do |conn, sock|
+            while device_curr < gnoty.devices.length
+              conn.write(gnoty.message_for_sending(gnoty.devices[device_curr]))
+              device_curr += 1
+            end
           end
           gnoty.sent_at = Time.now
           gnoty.save
+        rescue
+          device_curr += 1 #skip an invalid device or a device that currently unavalible
+          #TODO: delete invalid token, not sure the code in send_notifications_for_cert really works
+          retry if device_curr < gnoty.devices.length
         end
-      end
-    end
+      end #each
+    end #unless
   end
 
   def send_group_notification(gnoty)
