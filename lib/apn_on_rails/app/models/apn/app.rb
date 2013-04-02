@@ -113,7 +113,8 @@ class APN::App < APN::Base
       rescue
         error_notification = unsent_group_notifications[noti_curr]
         puts "something went wrong... notification=#{error_notification}, on device=#{error_notification.devices[device_curr]}"
-        #retry
+        device_curr += 1
+        retry
       end #APN
     end #unless
   end
