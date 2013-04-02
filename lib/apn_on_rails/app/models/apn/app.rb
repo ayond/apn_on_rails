@@ -99,7 +99,6 @@ class APN::App < APN::Base
       begin
       APN::Connection.open_for_delivery({:cert => self.cert}) do |conn, sock|
         while noti_curr < unsent_group_notifications.length
-          device_curr = 0
           gnoty = unsent_group_notifications[noti_curr]
           while device_curr < gnoty.devices.length
             conn.write(gnoty.message_for_sending(gnoty.devices[device_curr]))
@@ -107,12 +106,13 @@ class APN::App < APN::Base
           end
           gnoty.sent_at = Time.now
           gnoty.save
+          device_curr = 0 if device_curr >= gnoty.devices.length
           noti_curr += 1
         end
       end
       rescue
         error_notification = unsent_group_notifications[noti_curr]
-        STDERR.puts "something went wrong... notification=#{error_notification}, on device=#{error_notification.devices[device_curr]}"
+        puts "something went wrong... notification=#{error_notification}, on device=#{error_notification.devices[device_curr]}"
         #retry
       end #APN
     end #unless
