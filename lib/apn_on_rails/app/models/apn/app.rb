@@ -94,24 +94,27 @@ class APN::App < APN::Base
       return
     end
     unless self.unsent_group_notifications.blank?
-      unsent_group_notifications.each do |gnoty|
-        device_curr = 0 # remember the broken position and skip the device.
-        begin
-          # build connection to the server for each notification
-          APN::Connection.open_for_delivery({:cert => self.cert}) do |conn, sock|
-            while device_curr < gnoty.devices.length
-              conn.write(gnoty.message_for_sending(gnoty.devices[device_curr]))
-              device_curr += 1
-            end
+      noti_curr = 0
+      device_curr = 0
+      begin
+      APN::Connection.open_for_delivery({:cert => self.cert}) do |conn, sock|
+        while noti_curr < unsent_group_notifications.length
+          device_curr = 0
+          gnoty = unsent_group_notifications[noti_curr]
+          while device_curr < gnoty.devices.length
+            conn.write(gnoty.message_for_sending(gnoty.devices[device_curr]))
+            device_curr += 1
           end
           gnoty.sent_at = Time.now
           gnoty.save
-        rescue
-          device_curr += 1 #skip an invalid device or a device that currently unavalible
-          #TODO: delete invalid token, not sure the code in send_notifications_for_cert really works
-          retry if device_curr < gnoty.devices.length
+          noti_curr += 1
         end
-      end #each
+      end
+      rescue
+        error_notification = unsent_group_notifications[noti_curr]
+        STDERR.puts "something went wrong... notification=#{error_notification}, on device=#{error_notification.devices[device_curr]}"
+        #retry
+      end #APN
     end #unless
   end
 
